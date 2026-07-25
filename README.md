@@ -1,5 +1,11 @@
 # Trail Brake Trainer
 
+**[▶ Try it live](https://cisanta1029.github.io/trail-brake-trainer/)** — no
+install, runs directly in Chrome/Edge. Requires a USB pedal set (or wheel
+with pedals) to actually train with; without one, use the "USE MOUSE
+INSTEAD" test mode on the calibration screen to try the app without
+hardware.
+
 A single-file, offline brake-modulation trainer for sim racing. It reads your
 brake pedal directly through the browser's Gamepad API, plays a "ghost"
 target trace (a stab-and-release brake profile), and scores how closely your
