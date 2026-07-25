@@ -11,7 +11,7 @@ browser's local storage and can be exported to CSV at any time.
 
 ## Development notes
 
-This project was built collaboratively with Claude (Anthropic, Sonnet 5) —
+This project was built collaboratively with Claude (Anthropic, Fable 5) —
 iterating through feature design, debugging real hardware issues (including
 a pedal-detection bug where calibration was locking onto a connected
 wheelbase instead of the actual pedals), and working through licensing and
