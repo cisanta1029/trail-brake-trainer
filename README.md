@@ -23,7 +23,7 @@ process is planned as a blog post.
 
 ## Getting started
 
-1. Open `trail-brake-trainer.html` directly (double-click the file, or drag it
+1. Open `index.html` directly (double-click the file, or drag it
    into Chrome/Edge). It will not work correctly inside an embedded preview
    frame — it needs to be a normal top-level page for the Gamepad API to work.
 2. Click **CALIBRATE**.
