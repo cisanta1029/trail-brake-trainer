@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brake Trace Trainer</title>
+<style>
+  :root {
+    --bg: #101216;
+    --panel: #171a20;
+    --panel2: #1d2129;
+    --line: #2a2f3a;
+    --text: #d7dce4;
+    --dim: #7d8592;
+    --user: #22d3ee;
+    --ghost: rgba(255,255,255,0.55);
+    --bad: #ef4444;
+    --good: #4ade80;
+    --accent: #22d3ee;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Consolas, monospace;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ---------- Top bar ---------- */
+  #topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 8px 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+  #topbar .brand { color: var(--dim); letter-spacing: 2px; font-size: 11px; }
+  #topbar .mode { color: var(--accent); font-weight: 700; letter-spacing: 1px; }
+  #topbar .timer { font-size: 18px; font-weight: 700; min-width: 70px; }
+  #topbar .spacer { flex: 1; }
+  .btn {
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #06222a; border-color: var(--accent); font-weight: 700; }
+  .btn.primary:hover { filter: brightness(1.1); color: #06222a; }
+  .btn.danger:hover { border-color: var(--bad); color: var(--bad); }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  select, input[type=range] { accent-color: var(--accent); }
+  select {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    font-family: inherit; font-size: 12px; padding: 5px 8px; border-radius: 4px;
+  }
+
+  /* ---------- Main layout ---------- */
+  #main { flex: 1; display: flex; min-height: 0; }
+  #traceWrap { flex: 1; position: relative; min-width: 0; }
+  canvas#trace { width: 100%; height: 100%; display: block; }
+
+  /* ---------- Side panel ---------- */
+  #side {
+    width: 190px;
+    background: var(--panel);
+    border-left: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    padding: 12px 10px;
+    gap: 14px;
+    font-size: 12px;
+  }
+  .sideBlock .lbl { color: var(--dim); font-size: 10px; letter-spacing: 1.5px; margin-bottom: 4px; }
+  .bigNum { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .bigNum.user { color: var(--user); }
+  .bigNum.ghostc { color: #fff; opacity: 0.75; }
+  #deltaNum { font-size: 20px; font-weight: 700; }
+  #bars {
+    flex: 1; display: flex; gap: 14px; justify-content: center; align-items: flex-end;
+    padding: 6px 0; min-height: 80px;
+  }
+  .barCol { display: flex; flex-direction: column; align-items: center; height: 100%; }
+  .barOuter {
+    flex: 1; width: 34px; background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 3px;
+    position: relative; overflow: hidden;
+  }
+  .barFill {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 0%;
+  }
+  .barCol .cap { margin-top: 5px; font-size: 10px; color: var(--dim); letter-spacing: 1px; }
+  #smoothLive { font-size: 13px; }
+
+  /* ---------- Bottom drawer ---------- */
+  #drawer {
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    padding: 10px 14px;
+    display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
+    font-size: 12px;
+  }
+  #drawer.hidden { display: none; }
+  .ctl { display: flex; align-items: center; gap: 7px; }
+  .ctl label { color: var(--dim); font-size: 11px; letter-spacing: 0.5px; }
+  .ctl output { color: var(--text); min-width: 34px; text-align: right; }
+  .toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .toggle input { accent-color: var(--accent); }
+
+  /* ---------- Overlays ---------- */
+  .overlay {
+    position: absolute; inset: 0;
+    background: rgba(10,12,15,0.88);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10;
+  }
+  .overlay.hidden { display: none; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 26px 30px;
+    max-width: 640px;
+    width: 92%;
+    max-height: 88%;
+    overflow-y: auto;
+  }
+  .card h1 { font-size: 18px; letter-spacing: 2px; margin-bottom: 6px; }
+  .card h2 { font-size: 13px; letter-spacing: 1.5px; color: var(--dim); margin: 16px 0 8px; }
+  .card p { font-size: 13px; line-height: 1.55; color: var(--text); margin-bottom: 10px; }
+  .card .hint { color: var(--dim); font-size: 12px; }
+  #calStatus { margin: 14px 0; font-size: 14px; color: var(--accent); min-height: 40px; }
+  #calAxisInfo { font-size: 12px; color: var(--dim); margin-bottom: 12px; }
+
+  #countNum {
+    font-size: 120px; font-weight: 700; color: var(--accent);
+    text-shadow: 0 0 40px rgba(34,211,238,0.4);
+  }
+
+  /* ---------- Results ---------- */
+  .metricGrid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px; margin: 12px 0;
+  }
+  .metric {
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 5px;
+    padding: 10px 12px;
+    cursor: help;
+  }
+  .metric:hover { border-color: var(--accent); }
+  .metric .mv { font-size: 21px; font-weight: 700; }
+  .metric .ml { font-size: 10px; color: var(--dim); letter-spacing: 1px; margin-top: 3px; }
+  table.corners { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  table.corners th { color: var(--dim); font-weight: 400; font-size: 10px; letter-spacing: 1px; text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  table.corners td { text-align: right; padding: 4px 8px; border-bottom: 1px solid rgba(42,47,58,0.5); }
+  table.corners th:first-child, table.corners td:first-child { text-align: left; }
+  #sparkWrap { margin-top: 14px; }
+  canvas#spark { width: 100%; height: 60px; display: block; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
+  .cardBtns { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .statusPill {
+    display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 11px;
+    border: 1px solid var(--line); color: var(--dim);
+  }
+  .statusPill.ok { color: var(--good); border-color: rgba(74,222,128,0.4); }
+  .statusPill.warn { color: var(--bad); border-color: rgba(239,68,68,0.4); }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span class="brand">BRAKE TRACE TRAINER</span>
+  <span class="mode" id="modeLabel">IDLE</span>
+  <span class="timer" id="timerLabel">--.-</span>
+  <span id="cornerLabel" style="color:var(--dim)"></span>
+  <span class="spacer"></span>
+  <span class="statusPill" id="padStatus">NO PEDAL</span>
+  <button class="btn" id="btnCalibrate">CALIBRATE</button>
+  <button class="btn" id="btnPractice">FREE PRACTICE</button>
+  <button class="btn primary" id="btnChallenge">START CHALLENGE</button>
+  <button class="btn danger" id="btnStop" disabled>STOP</button>
+</div>
+
+<div id="main">
+  <div id="traceWrap">
+    <canvas id="trace"></canvas>
+
+    <!-- Calibration overlay -->
+    <div class="overlay" id="calOverlay">
+      <div class="card">
+        <h1>PEDAL CALIBRATION</h1>
+        <p>Connect your pedals via USB, then <b>press the brake pedal once anywhere</b> so the browser detects the device (browsers hide gamepads until an input occurs).</p>
+        <div id="calStatus">Waiting for gamepad…</div>
+        <div id="calAxisInfo"></div>
+        <p class="hint">Step 1: Press the brake to 100% and hold. &nbsp; Step 2: Fully release. The axis with the largest movement is auto-selected and its range mapped to 0–100%.</p>
+        <div class="cardBtns">
+          <button class="btn primary" id="btnCalStart">BEGIN</button>
+          <button class="btn" id="btnCalMouse">USE MOUSE INSTEAD (TEST MODE)</button>
+          <button class="btn" id="btnCalClose">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Countdown overlay -->
+    <div class="overlay hidden" id="countOverlay">
+      <div id="countNum">3</div>
+    </div>
+
+    <!-- Results overlay -->
+    <div class="overlay hidden" id="resultsOverlay">
+      <div class="card">
+        <h1>ROUND RESULTS</h1>
+        <div class="metricGrid" id="metricGrid"></div>
+        <p class="hint">Hover over any metric for a full explanation of what it measures and what to aim for.</p>
+        <h2>PER-CORNER BREAKDOWN</h2>
+        <div style="overflow-x:auto"><table class="corners" id="cornerTable"></table></div>
+        <div id="sparkWrap">
+          <h2>RELEASE SMOOTHNESS TREND (LAST 20 ROUNDS · LOWER = SMOOTHER)</h2>
+          <canvas id="spark"></canvas>
+        </div>
+        <div class="cardBtns">
+          <button class="btn primary" id="btnAgain">RUN AGAIN</button>
+          <button class="btn" id="btnResultsClose">CLOSE</button>
+          <button class="btn" id="btnExport">EXPORT CSV</button>
+          <button class="btn danger" id="btnClearHist">CLEAR HISTORY</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="side">
+    <div class="sideBlock" id="readoutBlock">
+      <div class="lbl">GHOST</div>
+      <div class="bigNum ghostc" id="ghostPct">--%</div>
+      <div class="lbl" style="margin-top:8px">YOU</div>
+      <div class="bigNum user" id="userPct">--%</div>
+      <div class="lbl" style="margin-top:8px">DELTA</div>
+      <div id="deltaNum">--</div>
+    </div>
+    <div class="sideBlock" style="flex:1; display:flex; flex-direction:column;" id="barsBlock">
+      <div class="lbl">BRAKE BARS</div>
+      <div id="bars">
+        <div class="barCol">
+          <div class="barOuter"><div class="barFill" id="barGhost" style="background:rgba(255,255,255,0.5)"></div></div>
+          <div class="cap">GHOST</div>
+        </div>
+        <div class="barCol">
+          <div class="barOuter"><div class="barFill" id="barUser" style="background:var(--user)"></div></div>
+          <div class="cap">YOU</div>
+        </div>
+      </div>
+    </div>
+    <div class="sideBlock">
+      <div class="lbl">LIVE ERROR (RMS, 3s)</div>
+      <div id="smoothLive">--</div>
+    </div>
+  </div>
+</div>
+
+<div id="drawer">
+  <div class="ctl">
+    <label>ROUND</label>
+    <select id="selDuration">
+      <option value="30">30 s</option>
+      <option value="60" selected>60 s</option>
+      <option value="120">2 min</option>
+    </select>
+  </div>
+  <div class="ctl">
+    <label>RELEASE SHAPE</label>
+    <select id="selShape">
+      <option value="expo" selected>Exponential (classic trail)</option>
+      <option value="linear">Linear</option>
+      <option value="late">Late release</option>
+      <option value="steps">Steps (pressure hold drill)</option>
+      <option value="mixed">Mixed (varied)</option>
+    </select>
+  </div>
+  <div class="ctl">
+    <label>PEAK HOLD</label>
+    <select id="selHold">
+      <option value="0.5">0.5 s</option>
+      <option value="1">1 s</option>
+      <option value="2" selected>2 s</option>
+      <option value="3">3 s</option>
+      <option value="var">Variable</option>
+    </select>
+  </div>
+  <div class="ctl">
+    <label>RELEASE TIME</label>
+    <select id="selRelease">
+      <option value="1.5">1.5 s</option>
+      <option value="2.5" selected>2.5 s</option>
+      <option value="3.5">3.5 s</option>
+      <option value="var">Variable</option>
+    </select>
+  </div>
+  <div class="ctl">
+    <label>PEAK CAP</label>
+    <input type="range" id="rngPeak" min="40" max="100" value="90" step="5">
+    <output id="outPeak">90%</output>
+  </div>
+  <div class="ctl">
+    <label>WINDOW</label>
+    <input type="range" id="rngWindow" min="4" max="30" value="10" step="1">
+    <output id="outWindow">10s</output>
+  </div>
+  <div class="ctl">
+    <label class="toggle"><input type="checkbox" id="chkBars" checked> BARS</label>
+    <label class="toggle"><input type="checkbox" id="chkReadout"> LIVE %</label>
+    <label class="toggle"><input type="checkbox" id="chkAudio"> AUDIO CUE</label>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* =========================================================
+   STATE
+========================================================= */
+const S = {
+  mode: "idle",              // idle | calibrating | countdown | challenge | practice | results
+  gamepadIndex: null,
+  axisIndex: null,
+  axisRest: 0,
+  axisPressed: 1,
+  mouseMode: false,
+  mouseValue: 0,
+  ghostSegments: [],         // [{tStart, tEnd, fn(t)->0..1, peak, id}]
+  roundDuration: 60,
+  tStart: 0,                 // performance.now() ms at round start
+  samples: [],               // {t (s, round-relative), ghost, user}
+  lastSampleT: -1,
+  window: 10,
+  audioCtx: null, osc: null, gainNode: null,
+  history: [],
+  practiceLoopLen: 0,
+  liveErrBuf: [],
+};
+
+const SAMPLE_HZ = 60;
+const DEVIATION_FLASH = 0.12;
+const HIST_KEY = "btt_history_v1";
+
+/* =========================================================
+   DOM
+========================================================= */
+const $ = id => document.getElementById(id);
+const canvas = $("trace"), ctx = canvas.getContext("2d");
+const els = {
+  modeLabel: $("modeLabel"), timerLabel: $("timerLabel"), cornerLabel: $("cornerLabel"),
+  padStatus: $("padStatus"),
+  ghostPct: $("ghostPct"), userPct: $("userPct"), deltaNum: $("deltaNum"),
+  barGhost: $("barGhost"), barUser: $("barUser"),
+  smoothLive: $("smoothLive"),
+  readoutBlock: $("readoutBlock"), barsBlock: $("barsBlock"),
+  calOverlay: $("calOverlay"), calStatus: $("calStatus"), calAxisInfo: $("calAxisInfo"),
+  countOverlay: $("countOverlay"), countNum: $("countNum"),
+  resultsOverlay: $("resultsOverlay"), metricGrid: $("metricGrid"),
+  cornerTable: $("cornerTable"), spark: $("spark"),
+  drawer: $("drawer"),
+};
+
+/* =========================================================
+   HISTORY PERSISTENCE (runs as a local file → localStorage OK)
+========================================================= */
+function loadHistory() {
+  try { S.history = JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); }
+  catch(e) { S.history = []; }
+}
+function saveHistory() {
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(S.history.slice(-500))); } catch(e) {}
+}
+loadHistory();
+
+/* =========================================================
+   PEDAL INPUT
+========================================================= */
+window.addEventListener("gamepadconnected", e => {
+  if (S.gamepadIndex === null) S.gamepadIndex = e.gamepad.index;
+  updatePadStatus();
+});
+window.addEventListener("gamepaddisconnected", e => {
+  if (e.gamepad.index === S.gamepadIndex) S.gamepadIndex = null;
+  updatePadStatus();
+});
+function updatePadStatus() {
+  if (S.mouseMode) {
+    els.padStatus.textContent = "MOUSE MODE"; els.padStatus.className = "statusPill ok";
+  } else if (S.gamepadIndex !== null && S.axisIndex !== null) {
+    els.padStatus.textContent = "PEDAL OK · AXIS " + S.axisIndex;
+    els.padStatus.className = "statusPill ok";
+  } else if (S.gamepadIndex !== null) {
+    els.padStatus.textContent = "PEDAL FOUND · CALIBRATE";
+    els.padStatus.className = "statusPill warn";
+  } else {
+    els.padStatus.textContent = "NO PEDAL"; els.padStatus.className = "statusPill warn";
+  }
+}
+
+function readPedal() {
+  if (S.mouseMode) return S.mouseValue;
+  if (S.gamepadIndex === null || S.axisIndex === null) return 0;
+  const gp = navigator.getGamepads()[S.gamepadIndex];
+  if (!gp) return 0;
+  const raw = gp.axes[S.axisIndex];
+  if (raw === undefined) return 0;
+  const span = S.axisPressed - S.axisRest;
+  if (Math.abs(span) < 1e-6) return 0;
+  let v = (raw - S.axisRest) / span;
+  return Math.min(1, Math.max(0, v));
+}
+
+/* Mouse test mode: hold left button, vertical position = pressure */
+let mouseDown = false;
+canvas.addEventListener("mousedown", e => { mouseDown = true; mouseMove(e); });
+window.addEventListener("mouseup", () => { mouseDown = false; if (S.mouseMode) S.mouseValue = 0; });
+canvas.addEventListener("mousemove", mouseMove);
+function mouseMove(e) {
+  if (!S.mouseMode || !mouseDown) return;
+  const r = canvas.getBoundingClientRect();
+  S.mouseValue = Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height));
+}
+
+/* =========================================================
+   CALIBRATION
+========================================================= */
+let cal = null;
+$("btnCalibrate").onclick = () => { els.calOverlay.classList.remove("hidden"); els.calStatus.textContent = "Waiting for gamepad… press the brake once."; };
+$("btnCalClose").onclick = () => { els.calOverlay.classList.add("hidden"); cal = null; };
+$("btnCalMouse").onclick = () => {
+  S.mouseMode = true; updatePadStatus();
+  els.calOverlay.classList.add("hidden");
+  cal = null;
+};
+$("btnCalStart").onclick = () => {
+  const gps = navigator.getGamepads();
+  const devices = [];
+  const names = [];
+  for (let i = 0; i < gps.length; i++) {
+    if (!gps[i]) continue;
+    devices.push({
+      index: i,
+      base: gps[i].axes.slice(),
+      min: gps[i].axes.slice(),
+      max: gps[i].axes.slice(),
+    });
+    names.push("[" + i + "] " + gps[i].id);
+  }
+  if (devices.length === 0) {
+    els.calStatus.textContent = "No gamepads detected yet — press the brake pedal once, then click BEGIN again.";
+    return;
+  }
+  cal = {
+    phase: "press",
+    devices,          // watching ALL connected devices
+    stableSince: null,
+  };
+  S.mouseMode = false;
+  els.calStatus.textContent = "STEP 1 — Press the brake to 100% and hold it… (watching all devices)";
+  els.calAxisInfo.innerHTML = "Devices detected:<br>" + names.join("<br>");
+};
+
+function calTick() {
+  if (!cal) return;
+  const gps = navigator.getGamepads();
+
+  if (cal.phase === "press") {
+    // scan every device, every axis; track min/max on all of them
+    let best = null, bestRange = 0;
+    for (const d of cal.devices) {
+      const gp = gps[d.index];
+      if (!gp) continue;
+      for (let i = 0; i < gp.axes.length; i++) {
+        d.min[i] = Math.min(d.min[i], gp.axes[i]);
+        d.max[i] = Math.max(d.max[i], gp.axes[i]);
+        const r = d.max[i] - d.min[i];
+        if (r > bestRange) { bestRange = r; best = { dev: d, axis: i }; }
+      }
+    }
+    if (best && bestRange > 0.5) {
+      const gp = gps[best.dev.index];
+      const cur = gp.axes[best.axis];
+      const base = best.dev.base[best.axis];
+      els.calStatus.textContent = "Detected: " + gp.id.slice(0, 40) + " · axis " + best.axis +
+        " (range " + bestRange.toFixed(2) + "). Hold full brake…";
+      const extreme = (Math.abs(best.dev.max[best.axis] - base) > Math.abs(best.dev.min[best.axis] - base))
+        ? best.dev.max[best.axis] : best.dev.min[best.axis];
+      if (Math.abs(cur - extreme) < 0.05) {
+        if (cal.stableSince === null) cal.stableSince = performance.now();
+        if (performance.now() - cal.stableSince > 700) {
+          cal.chosenDevice = best.dev.index;
+          cal.axis = best.axis;
+          cal.pressedVal = extreme;
+          cal.phase = "release";
+          cal.stableSince = null;
+          els.calStatus.textContent = "STEP 2 — Now fully RELEASE the pedal.";
+        }
+      } else cal.stableSince = null;
+    }
+  } else if (cal.phase === "release") {
+    const gp = gps[cal.chosenDevice];
+    if (!gp) return;
+    const cur = gp.axes[cal.axis];
+    if (Math.abs(cur - cal.pressedVal) > 0.4) {
+      if (cal.stableSince === null) { cal.stableSince = performance.now(); cal.restCandidate = cur; }
+      if (Math.abs(cur - cal.restCandidate) > 0.05) { cal.stableSince = performance.now(); cal.restCandidate = cur; }
+      if (performance.now() - cal.stableSince > 700) {
+        S.gamepadIndex = cal.chosenDevice;
+        S.axisIndex = cal.axis;
+        S.axisPressed = cal.pressedVal;
+        S.axisRest = cal.restCandidate;
+        els.calStatus.textContent = "✓ Calibrated: " + gp.id.slice(0, 40) + " · axis " + cal.axis +
+          " · rest " + S.axisRest.toFixed(2) + " → full " + S.axisPressed.toFixed(2);
+        cal = null;
+        updatePadStatus();
+        setTimeout(() => els.calOverlay.classList.add("hidden"), 900);
+      }
+    }
+  }
+}
+
+/* =========================================================
+   GHOST GENERATION
+   Segments produce pressure 0..1 as a function of round time (s)
+========================================================= */
+function rand(a, b) { return a + Math.random() * (b - a); }
+
+function releaseFn(shape, k) {
+  // x in 0..1 (release progress) -> fraction of peak remaining (1 -> 0)
+  switch (shape) {
+    case "linear": return x => 1 - x;
+    case "late":   return x => 1 - Math.pow(x, 3);              // hold, then drop
+    case "expo":
+    default: {
+      const kk = k || 3.2;
+      const e = Math.exp(-kk);
+      return x => (Math.exp(-kk * x) - e) / (1 - e);            // steep→flat, exact 0 at x=1
+    }
+  }
+}
+
+function makeCorner(tStart, opts) {
+  const peakCap = opts.peakCap;
+  const peak = rand(0.6, 1.0) * peakCap;
+  const ramp = rand(0.10, 0.16);
+  const plateau = (opts.hold === "var") ? rand(0.5, 3.0) : parseFloat(opts.hold);
+  let shape = opts.shape;
+  if (shape === "mixed") shape = ["expo", "linear", "late"][Math.floor(Math.random() * 3)];
+
+  let release, rel;
+  if (shape === "steps") {
+    // Pressure-hold drill: after the peak hold, drop to 75% → 50% → 25% of peak,
+    // holding each level for the same duration as the peak hold, then release to 0.
+    const stepHold = (opts.hold === "var") ? 2.0 : parseFloat(opts.hold);
+    const nLower = 3;
+    release = nLower * stepHold;
+    rel = x => {
+      const seg = Math.min(nLower - 1, Math.floor(x * nLower));
+      const within = x * nLower - seg;
+      const lvlA = (nLower - seg) / (nLower + 1);       // 0.75, 0.50, 0.25
+      const lvlB = (nLower - seg - 1) / (nLower + 1);   // next level down (0 at the end)
+      const blend = within > 0.94 ? (within - 0.94) / 0.06 : 0;  // brief ramp between steps
+      return lvlA + (lvlB - lvlA) * blend;
+    };
+  } else {
+    release = (opts.release === "var") ? rand(1.8, 3.5) : parseFloat(opts.release);
+    rel = releaseFn(shape, rand(2.6, 4.0));
+  }
+
+  const tEnd = tStart + ramp + plateau + release;
+  return {
+    tStart, tEnd, peak, shape,
+    rampEnd: tStart + ramp,
+    plateauEnd: tStart + ramp + plateau,
+    fn(t) {
+      if (t < tStart || t > tEnd) return 0;
+      if (t < this.rampEnd) {
+        const x = (t - tStart) / ramp;
+        return peak * (x * x * (3 - 2 * x));      // smoothstep ramp
+      }
+      if (t < this.plateauEnd) return peak;
+      const x = (t - this.plateauEnd) / release;
+      return peak * rel(Math.min(1, x));
+    }
+  };
+}
+
+function generateRound(duration, opts) {
+  const segs = [];
+  let t = rand(1.5, 2.5);                          // initial straight
+  let id = 1;
+  while (true) {
+    const c = makeCorner(t, opts);
+    if (c.tEnd > duration - 0.5) break;
+    c.id = id++;
+    segs.push(c);
+    t = c.tEnd + rand(2.0, 5.0);                   // straight between corners
+  }
+  return segs;
+}
+
+function generatePracticeLoop(opts) {
+  // single corner + rest, looped
+  const segs = [];
+  const c = makeCorner(2.0, opts);
+  c.id = 1;
+  segs.push(c);
+  S.practiceLoopLen = c.tEnd + 2.5;
+  return segs;
+}
+
+function ghostAt(t) {
+  if (S.mode === "practice" && S.practiceLoopLen > 0) t = t % S.practiceLoopLen;
+  for (const s of S.ghostSegments) {
+    if (t >= s.tStart && t <= s.tEnd) return s.fn(t);
+  }
+  return 0;
+}
+function cornerIdAt(t) {
+  if (S.mode === "practice" && S.practiceLoopLen > 0) t = t % S.practiceLoopLen;
+  for (const s of S.ghostSegments) if (t >= s.tStart && t <= s.tEnd) return s.id;
+  return null;
+}
+
+/* =========================================================
+   ROUND CONTROL
+========================================================= */
+function currentOpts() {
+  return {
+    peakCap: parseInt($("rngPeak").value, 10) / 100,
+    shape: $("selShape").value,
+    hold: $("selHold").value,
+    release: $("selRelease").value,
+  };
+}
+
+$("btnChallenge").onclick = () => startRound("challenge");
+$("btnPractice").onclick = () => startRound("practice");
+$("btnStop").onclick = stopRound;
+$("btnAgain").onclick = () => { els.resultsOverlay.classList.add("hidden"); startRound("challenge"); };
+$("btnResultsClose").onclick = () => { els.resultsOverlay.classList.add("hidden"); setIdle(); };
+
+function startRound(kind) {
+  if (!S.mouseMode && (S.gamepadIndex === null || S.axisIndex === null)) {
+    els.calOverlay.classList.remove("hidden");
+    return;
+  }
+  els.resultsOverlay.classList.add("hidden");
+  S.roundDuration = parseInt($("selDuration").value, 10);
+  const opts = currentOpts();
+  S.ghostSegments = (kind === "practice") ? generatePracticeLoop(opts) : generateRound(S.roundDuration, opts);
+  S.samples = [];
+  S.liveErrBuf = [];
+  S.lastSampleT = -1;
+
+  if (kind === "challenge") {
+    S.mode = "countdown";
+    els.modeLabel.textContent = "CHALLENGE";
+    els.drawer.classList.add("hidden");
+    runCountdown(() => {
+      S.mode = "challenge";
+      S.tStart = performance.now();
+      $("btnStop").disabled = false;
+      audioStart();
+    });
+  } else {
+    S.mode = "practice";
+    els.modeLabel.textContent = "FREE PRACTICE";
+    S.tStart = performance.now();
+    $("btnStop").disabled = false;
+    audioStart();
+  }
+}
+
+function runCountdown(done) {
+  els.countOverlay.classList.remove("hidden");
+  let n = 3;
+  els.countNum.textContent = n;
+  const iv = setInterval(() => {
+    n--;
+    if (n <= 0) {
+      clearInterval(iv);
+      els.countOverlay.classList.add("hidden");
+      done();
+    } else els.countNum.textContent = n;
+  }, 1000);
+}
+
+function stopRound() {
+  const wasChallenge = (S.mode === "challenge");
+  const completed = wasChallenge && roundTime() >= S.roundDuration - 0.05;
+  audioStop();
+  $("btnStop").disabled = true;
+  els.drawer.classList.remove("hidden");
+  if (wasChallenge && S.samples.length > SAMPLE_HZ * 3) {
+    finishChallenge(completed);
+  } else {
+    setIdle();
+  }
+}
+
+function setIdle() {
+  S.mode = "idle";
+  els.modeLabel.textContent = "IDLE";
+  els.timerLabel.textContent = "--.-";
+  els.cornerLabel.textContent = "";
+  els.drawer.classList.remove("hidden");
+}
+
+function roundTime() {
+  return (performance.now() - S.tStart) / 1000;
+}
+
+/* =========================================================
+   METRICS
+========================================================= */
+function computeMetrics(samples, segments) {
+  const n = samples.length;
+  const dt = 1 / SAMPLE_HZ;
+
+  // RMSE overall
+  let se = 0;
+  for (const s of samples) se += (s.user - s.ghost) ** 2;
+  const rmse = Math.sqrt(se / n);
+
+  // Lag via cross-correlation (±0.5s)
+  const maxShift = Math.round(0.5 * SAMPLE_HZ);
+  let bestShift = 0, bestErr = Infinity;
+  for (let sh = -maxShift; sh <= maxShift; sh++) {
+    let e = 0, c = 0;
+    for (let i = 0; i < n; i++) {
+      const j = i + sh;
+      if (j < 0 || j >= n) continue;
+      e += (samples[j].user - samples[i].ghost) ** 2; c++;
+    }
+    if (c > n * 0.6) { e /= c; if (e < bestErr) { bestErr = e; bestShift = sh; } }
+  }
+  const lagMs = Math.round(bestShift * dt * 1000); // + = you are late
+
+  // Per-corner + release smoothness
+  const corners = [];
+  let totalReversals = 0, totalRelSamples = 0, relDerivs = [];
+  for (const seg of segments) {
+    const relStartT = seg.plateauEnd, relEndT = seg.tEnd;
+    let cse = 0, cn = 0, reversals = 0, lastDir = 0, relN = 0;
+    let peakUser = 0;
+    const cDerivs = [];
+    for (let i = 0; i < n; i++) {
+      const t = samples[i].t;
+      if (t < seg.tStart || t > seg.tEnd + 0.3) continue;
+      cse += (samples[i].user - samples[i].ghost) ** 2; cn++;
+      peakUser = Math.max(peakUser, samples[i].user);
+      if (t >= relStartT && t <= relEndT && i > 0) {
+        const d = (samples[i].user - samples[i-1].user) / dt;
+        cDerivs.push(d); relDerivs.push(d); relN++;
+        const dir = d > 0.03 ? 1 : d < -0.03 ? -1 : 0;
+        if (dir !== 0 && lastDir !== 0 && dir !== lastDir) reversals++;
+        if (dir !== 0) lastDir = dir;
+      }
+    }
+    totalReversals += reversals; totalRelSamples += relN;
+    const sd = stddev(cDerivs);
+    corners.push({
+      id: seg.id, shape: seg.shape, peakGhost: seg.peak, peakUser,
+      rmse: cn ? Math.sqrt(cse / cn) : 0,
+      reversals, relSD: sd,
+    });
+  }
+  const relSD = stddev(relDerivs);
+  const reversalsPerCorner = corners.length ? totalReversals / corners.length : 0;
+
+  return { rmse, lagMs, relSD, reversalsPerCorner, corners };
+}
+
+function stddev(arr) {
+  if (arr.length < 2) return 0;
+  const m = arr.reduce((a,b)=>a+b,0) / arr.length;
+  return Math.sqrt(arr.reduce((a,b)=>a+(b-m)**2,0) / (arr.length - 1));
+}
+
+function finishChallenge(completed) {
+  const m = computeMetrics(S.samples, S.ghostSegments);
+  const rec = {
+    ts: new Date().toISOString(),
+    duration: S.roundDuration,
+    completed,
+    shape: $("selShape").value,
+    peakCap: parseInt($("rngPeak").value, 10),
+    rmse: +(m.rmse * 100).toFixed(2),
+    lagMs: m.lagMs,
+    relSD: +m.relSD.toFixed(3),
+    reversalsPerCorner: +m.reversalsPerCorner.toFixed(2),
+    corners: m.corners.map(c => ({
+      id: c.id, shape: c.shape,
+      peakGhost: +(c.peakGhost*100).toFixed(1),
+      peakUser: +(c.peakUser*100).toFixed(1),
+      rmse: +(c.rmse*100).toFixed(2),
+      reversals: c.reversals,
+      relSD: +c.relSD.toFixed(3),
+    })),
+  };
+  S.history.push(rec);
+  saveHistory();
+  showResults(rec, m);
+  S.mode = "results";
+  els.modeLabel.textContent = "RESULTS";
+}
+
+/* =========================================================
+   RESULTS UI
+========================================================= */
+function showResults(rec) {
+  const g = els.metricGrid;
+  const lagTxt = rec.lagMs > 0 ? "+" + rec.lagMs + " ms late" : rec.lagMs + " ms early";
+  const lagAbs = Math.abs(rec.lagMs);
+  g.innerHTML = `
+    <div class="metric" title="Root Mean Squared Error between your trace and the ghost across the whole round, in % of full brake travel. It measures overall tracking accuracy, and punishes big misses more than small ones. Under ~8% is solid; under 5% is excellent.">
+      <div class="mv">${rec.rmse.toFixed(1)}%</div>
+      <div class="ml">RMSE · OVERALL ERROR · ↓ LOWER IS BETTER</div>
+    </div>
+    <div class="metric" title="Standard deviation of your pedal's rate of change, measured only during the ghost's release phases. A perfectly smooth, steady release has a nearly constant rate of change, so its SD is low. Jagged, stuttery releases spike this number. This is THE metric for your original goal — watch it trend down over weeks.">
+      <div class="mv">${rec.relSD.toFixed(2)}</div>
+      <div class="ml">RELEASE SMOOTHNESS · ↓ LOWER IS BETTER</div>
+    </div>
+    <div class="metric" title="How many times per corner your pedal changed direction during the release — i.e., you were releasing, then pressed back down (or vice versa). Each reversal is one 'jag' in your trace. A clean release has 0: pressure only ever decreases. 1–2 is minor correction; 4+ means you're chasing the ghost reactively instead of tracing one planned motion.">
+      <div class="mv">${rec.reversalsPerCorner.toFixed(1)}</div>
+      <div class="ml">REVERSALS / CORNER · TARGET 0</div>
+    </div>
+    <div class="metric" title="Cross-correlation finds the time shift that best aligns your trace with the ghost. Positive = you're consistently reacting late; negative = you're anticipating early. Under ±100 ms is very good. If this is large, your shape may be fine — you're just starting everything late, which is a different fix (look further ahead on the trace) than a shape problem.">
+      <div class="mv">${lagTxt}</div>
+      <div class="ml">TIMING · TARGET ±100 ms · ${lagAbs <= 100 ? "✓ ON TIME" : rec.lagMs > 0 ? "REACTING LATE" : "ANTICIPATING"}</div>
+    </div>
+  `;
+  let rows = `<tr><th>#</th><th>SHAPE</th><th>GHOST PK</th><th>YOUR PK</th><th>RMSE</th><th>REV</th><th>REL SD</th></tr>`;
+  for (const c of rec.corners) {
+    rows += `<tr><td>${c.id}</td><td style="text-align:left">${c.shape}</td><td>${c.peakGhost}%</td><td>${c.peakUser}%</td><td>${c.rmse}%</td><td>${c.reversals}</td><td>${c.relSD}</td></tr>`;
+  }
+  els.cornerTable.innerHTML = rows;
+  els.resultsOverlay.classList.remove("hidden");   // must be visible BEFORE drawing the sparkline
+  drawSpark();
+}
+
+function drawSpark() {
+  const c = els.spark, cx = c.getContext("2d");
+  const w = c.width = c.clientWidth * devicePixelRatio;
+  const h = c.height = 60 * devicePixelRatio;
+  cx.clearRect(0,0,w,h);
+  const data = S.history.slice(-20).map(r => r.relSD);
+  if (data.length < 2) {
+    cx.fillStyle = "#7d8592"; cx.font = (11*devicePixelRatio)+"px monospace";
+    cx.fillText("Complete more rounds to see a trend.", 10*devicePixelRatio, h/2);
+    return;
+  }
+  const max = Math.max(...data) * 1.15 || 1;
+  cx.strokeStyle = "#22d3ee"; cx.lineWidth = 2 * devicePixelRatio;
+  cx.beginPath();
+  data.forEach((v, i) => {
+    const x = (i / (data.length - 1)) * (w - 12) + 6;
+    const y = h - 6 - (v / max) * (h - 12);
+    i ? cx.lineTo(x, y) : cx.moveTo(x, y);
+  });
+  cx.stroke();
+  cx.fillStyle = "#22d3ee";
+  data.forEach((v, i) => {
+    const x = (i / (data.length - 1)) * (w - 12) + 6;
+    const y = h - 6 - (v / max) * (h - 12);
+    cx.beginPath(); cx.arc(x, y, 2.5*devicePixelRatio, 0, 7); cx.fill();
+  });
+}
+
+$("btnExport").onclick = () => {
+  let csv = "timestamp,duration_s,completed,shape_setting,peak_cap,corner_id,corner_shape,ghost_peak_pct,user_peak_pct,corner_rmse_pct,corner_reversals,corner_release_sd,round_rmse_pct,round_lag_ms,round_release_sd,round_reversals_per_corner\n";
+  for (const r of S.history) {
+    for (const c of r.corners) {
+      csv += [r.ts, r.duration, r.completed, r.shape, r.peakCap, c.id, c.shape, c.peakGhost, c.peakUser, c.rmse, c.reversals, c.relSD, r.rmse, r.lagMs, r.relSD, r.reversalsPerCorner].join(",") + "\n";
+    }
+  }
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "brake_trainer_history.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+$("btnClearHist").onclick = () => {
+  if (confirm("Delete all stored round history?")) {
+    S.history = []; saveHistory(); drawSpark();
+  }
+};
+
+/* =========================================================
+   AUDIO CUE
+========================================================= */
+function audioStart() {
+  if (!$("chkAudio").checked) return;
+  try {
+    S.audioCtx = S.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    S.osc = S.audioCtx.createOscillator();
+    S.gainNode = S.audioCtx.createGain();
+    S.osc.type = "triangle";
+    S.gainNode.gain.value = 0;
+    S.osc.connect(S.gainNode).connect(S.audioCtx.destination);
+    S.osc.start();
+  } catch(e) {}
+}
+function audioStop() {
+  if (S.osc) { try { S.osc.stop(); } catch(e){} S.osc = null; }
+}
+function audioUpdate(ghost) {
+  if (!S.osc || !S.gainNode) return;
+  const on = ghost > 0.01;
+  S.gainNode.gain.setTargetAtTime(on ? 0.06 : 0, S.audioCtx.currentTime, 0.02);
+  if (on) S.osc.frequency.setTargetAtTime(200 + ghost * 600, S.audioCtx.currentTime, 0.02);
+}
+
+/* =========================================================
+   MAIN LOOP: sampling + render
+========================================================= */
+function resize() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  canvas.width = r.width * devicePixelRatio;
+  canvas.height = r.height * devicePixelRatio;
+}
+window.addEventListener("resize", resize);
+
+function tick() {
+  requestAnimationFrame(tick);
+  calTick();
+  if (S.gamepadIndex === null && !S.mouseMode) {
+    // opportunistically adopt any gamepad that appears
+    const gps = navigator.getGamepads();
+    for (let i = 0; i < gps.length; i++) if (gps[i]) { S.gamepadIndex = i; updatePadStatus(); break; }
+  }
+
+  const user = readPedal();
+  const running = (S.mode === "challenge" || S.mode === "practice");
+  let t = 0, ghost = 0;
+
+  if (running) {
+    t = roundTime();
+    ghost = ghostAt(t);
+
+    // fixed-rate sampling: fill every 1/60s slot since last sample
+    const slot = Math.floor(t * SAMPLE_HZ);
+    if (slot > S.lastSampleT) {
+      for (let s = S.lastSampleT + 1; s <= slot; s++) {
+        const st = s / SAMPLE_HZ;
+        S.samples.push({ t: st, ghost: ghostAt(st), user });
+      }
+      S.lastSampleT = slot;
+      // live rolling RMS error (3s)
+      S.liveErrBuf.push((user - ghost) ** 2);
+      if (S.liveErrBuf.length > SAMPLE_HZ * 3) S.liveErrBuf.splice(0, S.liveErrBuf.length - SAMPLE_HZ * 3);
+    }
+
+    // timer + corner label
+    if (S.mode === "challenge") {
+      const remain = Math.max(0, S.roundDuration - t);
+      els.timerLabel.textContent = remain.toFixed(1);
+      if (remain <= 0) { stopRound(); }
+    } else {
+      els.timerLabel.textContent = t.toFixed(1);
+    }
+    const cid = cornerIdAt(t);
+    els.cornerLabel.textContent = cid ? ("CORNER " + cid) : "";
+    audioUpdate(ghost);
+  } else if (S.mode === "countdown") {
+    ghost = 0;
+  }
+
+  updateSidePanel(user, ghost, running);
+  render(t, user, ghost, running);
+}
+
+function updateSidePanel(user, ghost, running) {
+  const showReadout = $("chkReadout").checked;
+  els.readoutBlock.style.display = showReadout ? "" : "none";
+  const showBars = $("chkBars").checked;
+  els.barsBlock.style.display = showBars ? "" : "none";
+
+  if (showReadout) {
+    els.ghostPct.textContent = Math.round(ghost * 100) + "%";
+    els.userPct.textContent = Math.round(user * 100) + "%";
+    const d = Math.round((user - ghost) * 100);
+    els.deltaNum.textContent = (d > 0 ? "+" : "") + d + "%";
+    els.deltaNum.style.color = Math.abs(d) > DEVIATION_FLASH * 100 ? "var(--bad)" : "var(--good)";
+  }
+  if (showBars) {
+    els.barGhost.style.height = (ghost * 100) + "%";
+    els.barUser.style.height = (user * 100) + "%";
+    els.barUser.style.background = Math.abs(user - ghost) > DEVIATION_FLASH && running ? "var(--bad)" : "var(--user)";
+  }
+  if (running && S.liveErrBuf.length > 10) {
+    const rms = Math.sqrt(S.liveErrBuf.reduce((a,b)=>a+b,0) / S.liveErrBuf.length) * 100;
+    els.smoothLive.textContent = rms.toFixed(1) + "%";
+    els.smoothLive.style.color = rms > 12 ? "var(--bad)" : rms > 6 ? "var(--text)" : "var(--good)";
+  } else if (!running) {
+    els.smoothLive.textContent = "--";
+    els.smoothLive.style.color = "var(--text)";
+  }
+}
+
+/* ---------- Trace rendering ---------- */
+function render(t, user, ghost, running) {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const padT = 20 * devicePixelRatio, padB = 26 * devicePixelRatio;
+  const plotH = h - padT - padB;
+  const yOf = p => padT + (1 - p) * plotH;
+
+  S.window = parseInt($("rngWindow").value, 10);
+  const win = S.window;
+  const nowFrac = 0.32;                       // "now" line position (past left, future right)
+  const tNow = running ? t : 0;
+  const tLeft = tNow - win * nowFrac;
+  const tRight = tNow + win * (1 - nowFrac);
+  const xOf = tt => ((tt - tLeft) / win) * w;
+
+  // gridlines
+  ctx.strokeStyle = "rgba(42,47,58,0.7)";
+  ctx.lineWidth = 1;
+  ctx.font = (10 * devicePixelRatio) + "px monospace";
+  ctx.fillStyle = "#5a6170";
+  for (const p of [0, 0.25, 0.5, 0.75, 1]) {
+    const y = yOf(p);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    ctx.fillText(Math.round(p * 100) + "%", 6 * devicePixelRatio, y - 4 * devicePixelRatio);
+  }
+  // vertical second ticks
+  const firstTick = Math.ceil(tLeft);
+  ctx.strokeStyle = "rgba(42,47,58,0.35)";
+  for (let s = firstTick; s <= tRight; s++) {
+    const x = xOf(s);
+    ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, h - padB); ctx.stroke();
+  }
+
+  if (running || S.mode === "countdown") {
+    // ghost trace across full window (past + future)
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 3 * devicePixelRatio;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    const step = win / w * devicePixelRatio * 2; // ~2px steps
+    let started = false;
+    for (let tt = Math.max(0, tLeft); tt <= tRight; tt += step) {
+      const y = yOf(ghostAt(tt)), x = xOf(tt);
+      started ? ctx.lineTo(x, y) : (ctx.moveTo(x, y), started = true);
+    }
+    ctx.stroke();
+
+    // user trace (past only) — colored segments, red where deviating
+    if (S.samples.length > 1) {
+      ctx.lineWidth = 2 * devicePixelRatio;
+      const startIdx = Math.max(0, Math.floor(Math.max(0, tLeft) * SAMPLE_HZ));
+      let prev = null;
+      for (let i = startIdx; i < S.samples.length; i++) {
+        const s = S.samples[i];
+        if (s.t < tLeft) continue;
+        const x = xOf(s.t), y = yOf(s.user);
+        if (prev) {
+          ctx.strokeStyle = Math.abs(s.user - s.ghost) > DEVIATION_FLASH ? "#ef4444" : "#22d3ee";
+          ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(x, y); ctx.stroke();
+        }
+        prev = { x, y };
+      }
+    }
+
+    // "now" line
+    const xNow = xOf(tNow);
+    ctx.strokeStyle = "rgba(34,211,238,0.5)";
+    ctx.lineWidth = 1.5 * devicePixelRatio;
+    ctx.setLineDash([6 * devicePixelRatio, 5 * devicePixelRatio]);
+    ctx.beginPath(); ctx.moveTo(xNow, padT); ctx.lineTo(xNow, h - padB); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // current point markers on the now line
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.beginPath(); ctx.arc(xNow, yOf(ghost), 4.5 * devicePixelRatio, 0, 7); ctx.fill();
+    ctx.fillStyle = "#22d3ee";
+    ctx.beginPath(); ctx.arc(xNow, yOf(user), 4.5 * devicePixelRatio, 0, 7); ctx.fill();
+  } else {
+    ctx.fillStyle = "#5a6170";
+    ctx.font = (13 * devicePixelRatio) + "px monospace";
+    const msg = (S.axisIndex !== null || S.mouseMode)
+      ? "READY — start a challenge or free practice."
+      : "CALIBRATE your pedals to begin.";
+    ctx.fillText(msg, w / 2 - ctx.measureText(msg).width / 2, h / 2);
+  }
+}
+
+/* =========================================================
+   DRAWER OUTPUTS
+========================================================= */
+$("rngPeak").oninput = e => $("outPeak").textContent = e.target.value + "%";
+$("rngWindow").oninput = e => $("outWindow").textContent = e.target.value + "s";
+
+/* =========================================================
+   BOOT
+========================================================= */
+resize();
+updatePadStatus();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
